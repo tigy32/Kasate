@@ -295,6 +295,10 @@ pub extern "C-unwind" fn kasate_tuple_insert(
         pg_sys::ItemPointerSet(tid, tuple_id.block, tuple_id.offset);
         pgrx::warning!("[KASATE] Slot TID set to match storage");
 
+        // CRITICAL: Set the tableOid in the slot - PostgreSQL might check this!
+        slot_mut.tts_tableOid = pg_sys::Oid::from(relation_oid);
+        pgrx::warning!("[KASATE] Slot tableOid set to {}", relation_oid);
+
         pgrx::warning!("[KASATE] tuple_insert completed");
     }
 }
@@ -485,6 +489,26 @@ pub extern "C-unwind" fn kasate_tuple_fetch_row_version(
             clear_tuple_slot(slot);
             false
         }
+    }
+}
+
+#[pg_guard]
+pub extern "C-unwind" fn kasate_tuple_get_latest_tid(
+    scan: pg_sys::TableScanDesc,
+    tid: pg_sys::ItemPointer,
+) {
+    unsafe {
+        pgrx::warning!("[KASATE] ===== tuple_get_latest_tid called =====");
+
+        if scan.is_null() || tid.is_null() {
+            pgrx::warning!("[KASATE] tuple_get_latest_tid: null parameters");
+            return;
+        }
+
+        // For our simple implementation, the TID never changes
+        // (we don't have tuple versioning yet)
+        // So we just leave the TID as-is
+        pgrx::warning!("[KASATE] tuple_get_latest_tid: TID unchanged");
     }
 }
 

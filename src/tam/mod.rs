@@ -57,7 +57,7 @@ pub extern "C-unwind" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInf
 
         // Tuple fetch
         routine_ref.tuple_fetch_row_version = Some(kasate_tuple_fetch_row_version);
-        routine_ref.tuple_get_latest_tid = None;
+        routine_ref.tuple_get_latest_tid = Some(kasate_tuple_get_latest_tid);
         routine_ref.tuple_tid_valid = Some(kasate_tuple_tid_valid);
         routine_ref.tuple_satisfies_snapshot = Some(kasate_tuple_satisfies_snapshot);
 
