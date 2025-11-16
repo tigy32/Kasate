@@ -16,17 +16,15 @@ pgrx::pg_module_magic!();
 
 /// Extension initialization
 #[pg_guard]
-pub extern "C" fn _PG_init() {
+pub extern "C-unwind" fn _PG_init() {
     // Initialize the table access method
     tam::init_tableam();
 }
 
 /// Table access method handler - entry point for Postgres
-#[pg_extern(sql = r#"
-    CREATE FUNCTION kasate_handler(internal) RETURNS table_am_handler
-    LANGUAGE c AS 'MODULE_PATHNAME', 'kasate_tableam_handler';
-"#)]
-fn kasate_tableam_handler(fcinfo: pg_sys::FunctionCallInfo) -> pg_sys::Datum {
+/// Note: This is exported directly without #[pg_extern] since it needs raw Datum return
+#[no_mangle]
+pub extern "C-unwind" fn kasate_tableam_handler(fcinfo: pg_sys::FunctionCallInfo) -> pg_sys::Datum {
     tam::kasate_tableam_handler(fcinfo)
 }
 
@@ -41,7 +39,7 @@ fn create_kasate_am() {
 /// Helper function to get storage statistics
 #[pg_extern]
 fn kasate_storage_stats(relation_oid: pg_sys::Oid) -> TableIterator<'static, (name!(oid, pg_sys::Oid), name!(tuple_count, i64))> {
-    let storage = STORAGE.get_or_create_relation(relation_oid);
+    let storage = STORAGE.get_or_create_relation(relation_oid.into());
     let storage_guard = storage.read().unwrap();
     let count = storage_guard.len() as i64;
 

@@ -6,8 +6,8 @@ use crate::storage::{TupleId, Tuple};
 /// Convert Postgres ItemPointer to safe TupleId
 pub fn item_pointer_to_tuple_id(ctid: pg_sys::ItemPointerData) -> TupleId {
     unsafe {
-        let block = pg_sys::ItemPointerGetBlockNumber(&ctid as *const _);
-        let offset = pg_sys::ItemPointerGetOffsetNumber(&ctid as *const _);
+        let block = ctid.ip_blkid.bi_hi as u32 * 65536 + ctid.ip_blkid.bi_lo as u32;
+        let offset = ctid.ip_posid;
         TupleId::new(block, offset)
     }
 }
@@ -15,13 +15,9 @@ pub fn item_pointer_to_tuple_id(ctid: pg_sys::ItemPointerData) -> TupleId {
 /// Convert safe TupleId to Postgres ItemPointer
 pub fn tuple_id_to_item_pointer(tid: TupleId) -> pg_sys::ItemPointerData {
     let mut ctid = pg_sys::ItemPointerData::default();
-    unsafe {
-        pg_sys::ItemPointerSet(
-            &mut ctid as *mut _,
-            tid.block,
-            tid.offset,
-        );
-    }
+    ctid.ip_blkid.bi_hi = (tid.block / 65536) as u16;
+    ctid.ip_blkid.bi_lo = (tid.block % 65536) as u16;
+    ctid.ip_posid = tid.offset;
     ctid
 }
 
@@ -63,8 +59,8 @@ pub fn extract_tuple_xids(tuple: *mut pg_sys::HeapTupleData) -> (u32, u32) {
         }
 
         let header_ref = &*header;
-        let xmin = header_ref.t_choice.t_heap.t_xmin;
-        let xmax = header_ref.t_choice.t_heap.t_xmax;
+        let xmin = header_ref.t_choice.t_heap.t_xmin.into();
+        let xmax = header_ref.t_choice.t_heap.t_xmax.into();
 
         (xmin, xmax)
     }
@@ -112,8 +108,8 @@ pub fn copy_safe_tuple_to_heap(
 
         // Set transaction IDs
         let header_ref = &mut *tuple_ref.t_data;
-        header_ref.t_choice.t_heap.t_xmin = safe_tuple.xmin;
-        header_ref.t_choice.t_heap.t_xmax = safe_tuple.xmax;
+        header_ref.t_choice.t_heap.t_xmin = safe_tuple.xmin.into();
+        header_ref.t_choice.t_heap.t_xmax = safe_tuple.xmax.into();
 
         true
     }
@@ -127,14 +123,14 @@ pub fn extract_relation_oid(relation: pg_sys::Relation) -> Option<u32> {
 
     unsafe {
         let rel_ref = &*relation;
-        Some(rel_ref.rd_id)
+        Some(rel_ref.rd_id.into())
     }
 }
 
 /// Extract current transaction ID
 pub fn get_current_transaction_id() -> u32 {
     unsafe {
-        pg_sys::GetCurrentTransactionId()
+        pg_sys::GetCurrentTransactionId().into()
     }
 }
 
@@ -147,8 +143,8 @@ pub fn extract_snapshot_info(snapshot: pg_sys::Snapshot) -> (u32, u32) {
 
     unsafe {
         let snap_ref = &*snapshot;
-        let xmin = snap_ref.xmin;
-        let xmax = snap_ref.xmax;
+        let xmin = snap_ref.xmin.into();
+        let xmax = snap_ref.xmax.into();
         (xmin, xmax)
     }
 }

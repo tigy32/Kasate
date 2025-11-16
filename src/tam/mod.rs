@@ -12,7 +12,7 @@ use handlers::*;
 
 /// Register the Kasate table access method
 #[pg_guard]
-pub extern "C" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInfo) -> pg_sys::Datum {
+pub extern "C-unwind" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInfo) -> pg_sys::Datum {
     unsafe {
         let routine = pg_sys::palloc0(std::mem::size_of::<pg_sys::TableAmRoutine>())
             as *mut pg_sys::TableAmRoutine;
@@ -89,7 +89,7 @@ pub extern "C" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInfo) -> p
 
 /// Get slot callbacks for Kasate
 #[pg_guard]
-extern "C" fn kasate_slot_callbacks(_relation: pg_sys::Relation) -> *const pg_sys::TupleTableSlotOps {
+extern "C-unwind" fn kasate_slot_callbacks(_relation: pg_sys::Relation) -> *const pg_sys::TupleTableSlotOps {
     unsafe {
         // Use the heap tuple table slot ops for now
         // In a full implementation, we might want custom slot ops
