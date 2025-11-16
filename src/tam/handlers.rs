@@ -278,28 +278,8 @@ pub extern "C-unwind" fn kasate_tuple_insert(
             return;
         }
 
-        // Extract tuple data from slot
-        match extract_tuple_from_slot(slot) {
-            Some(tuple_data) => {
-                pgrx::warning!("[KASATE] Extracted {} bytes of tuple data", tuple_data.len());
-
-                // Insert into storage
-                let storage = STORAGE.get_or_create_relation(relation_oid);
-                let mut storage_guard = storage.write().unwrap();
-                let tid = storage_guard.insert(tuple_data, xid);
-                pgrx::warning!("[KASATE] Inserted tuple with TID: block={}, offset={}", tid.block, tid.offset);
-
-                // Release write lock
-                drop(storage_guard);
-
-                // DO NOT modify the slot! It's input-only.
-                // PostgreSQL will handle setting the TID through other mechanisms.
-                pgrx::warning!("[KASATE] Tuple stored with TID: block={}, offset={}", tid.block, tid.offset);
-            }
-            None => {
-                pgrx::warning!("[KASATE] ERROR: Failed to extract tuple data from slot");
-            }
-        }
+        // TESTING: Do absolutely NOTHING - just return
+        pgrx::warning!("[KASATE] Doing NOTHING - just returning immediately");
 
         pgrx::warning!("[KASATE] tuple_insert completed");
     }

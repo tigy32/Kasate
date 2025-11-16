@@ -89,10 +89,11 @@ pub extern "C-unwind" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInf
 /// Get slot callbacks for Kasate
 #[pg_guard]
 extern "C-unwind" fn kasate_slot_callbacks(_relation: pg_sys::Relation) -> *const pg_sys::TupleTableSlotOps {
+    pgrx::warning!("[KASATE] slot_callbacks called");
     unsafe {
-        // Use the heap tuple table slot ops for now
-        // In a full implementation, we might want custom slot ops
-        &pg_sys::TTSOpsHeapTuple as *const _
+        // Try using virtual tuple slot ops - simplest type
+        pgrx::warning!("[KASATE] Returning TTSOpsVirtual");
+        &pg_sys::TTSOpsVirtual as *const _
     }
 }
 
