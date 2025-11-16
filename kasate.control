@@ -1,0 +1,6 @@
+# kasate extension
+comment = 'Table Access Method using BTreeMap storage in safe Rust'
+default_version = '0.1.0'
+module_pathname = '$libdir/kasate'
+relocatable = false
+superuser = true
