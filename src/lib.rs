@@ -22,19 +22,35 @@ pub extern "C-unwind" fn _PG_init() {
 }
 
 /// Table access method handler - entry point for Postgres
-/// Note: This is exported directly without #[pg_extern] since it needs raw Datum return
-#[no_mangle]
-pub extern "C-unwind" fn kasate_tableam_handler(fcinfo: pg_sys::FunctionCallInfo) -> pg_sys::Datum {
-    tam::kasate_tableam_handler(fcinfo)
+use pgrx::pg_sys::Datum;
+
+// Manually declare the PG_FUNCTION_INFO_V1 macro for kasate_handler
+#[pgrx::pg_extern(immutable, parallel_safe, sql = false)]
+fn __kasate_handler_wrapper() {
+    // This is just to get PGRX to generate the function info
 }
 
-/// Create the table access method in SQL
-#[pg_extern(sql = r#"
-    CREATE ACCESS METHOD kasate TYPE TABLE HANDLER kasate_handler;
-"#)]
-fn create_kasate_am() {
-    // This is just a marker function, the actual creation happens via SQL
+#[pg_guard]
+#[no_mangle]
+pub extern "C-unwind" fn kasate_handler(_fcinfo: pg_sys::FunctionCallInfo) -> Datum {
+    tam::kasate_tableam_handler(_fcinfo)
 }
+
+// Use PGRX's way to declare the PG_FUNCTION_INFO_V1
+#[no_mangle]
+pub extern "C" fn pg_finfo_kasate_handler() -> &'static pg_sys::Pg_finfo_record {
+    const V1_API: pg_sys::Pg_finfo_record = pg_sys::Pg_finfo_record { api_version: 1 };
+    &V1_API
+}
+
+// Register the table access method via SQL
+pgrx::extension_sql!(r#"
+CREATE OR REPLACE FUNCTION kasate_handler(internal) RETURNS table_am_handler
+AS 'MODULE_PATHNAME', 'kasate_handler'
+LANGUAGE C STRICT;
+
+CREATE ACCESS METHOD kasate TYPE TABLE HANDLER kasate_handler;
+"#, name = "create_tableam");
 
 /// Helper function to get storage statistics
 #[pg_extern]
