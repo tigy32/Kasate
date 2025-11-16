@@ -278,10 +278,45 @@ pub extern "C-unwind" fn kasate_tuple_insert(
             return;
         }
 
-        // TESTING: Do absolutely NOTHING - just return
-        pgrx::warning!("[KASATE] Doing NOTHING - just returning immediately");
+        // CRITICAL: PostgreSQL requires we actually store the tuple AND set the TID
+        pgrx::warning!("[KASATE] Actually storing tuple in storage");
+
+        // Insert dummy data into storage
+        let storage = STORAGE.get_or_create_relation(relation_oid);
+        let mut storage_guard = storage.write().unwrap();
+        let tuple_id = storage_guard.insert(vec![1, 2, 3, 4], xid);
+        drop(storage_guard);
+
+        pgrx::warning!("[KASATE] Tuple stored with TID=({},{})", tuple_id.block, tuple_id.offset);
+
+        // Set the TID in the slot to match what we stored
+        let slot_mut = &mut *slot;
+        let tid = &mut slot_mut.tts_tid as *mut pg_sys::ItemPointerData;
+        pg_sys::ItemPointerSet(tid, tuple_id.block, tuple_id.offset);
+        pgrx::warning!("[KASATE] Slot TID set to match storage");
 
         pgrx::warning!("[KASATE] tuple_insert completed");
+    }
+}
+
+#[pg_guard]
+pub extern "C-unwind" fn kasate_multi_insert(
+    relation: pg_sys::Relation,
+    slots: *mut *mut pg_sys::TupleTableSlot,
+    nslots: std::os::raw::c_int,
+    _cid: pg_sys::CommandId,
+    _options: std::os::raw::c_int,
+    _bistate: *mut pg_sys::BulkInsertStateData,
+) {
+    unsafe {
+        pgrx::warning!("[KASATE] ===== multi_insert called with {} slots =====", nslots);
+        // For now, just call tuple_insert for each slot
+        for i in 0..nslots as isize {
+            let slot = *slots.offset(i);
+            pgrx::warning!("[KASATE] multi_insert: processing slot {}", i);
+            kasate_tuple_insert(relation, slot, _cid, _options, _bistate);
+        }
+        pgrx::warning!("[KASATE] ===== multi_insert completed =====");
     }
 }
 
@@ -412,6 +447,7 @@ pub extern "C-unwind" fn kasate_tuple_fetch_row_version(
     slot: *mut pg_sys::TupleTableSlot,
 ) -> bool {
     unsafe {
+        pgrx::warning!("[KASATE] ===== tuple_fetch_row_version called =====");
         pgrx::warning!("[KASATE] tuple_fetch_row_version called");
 
         if relation.is_null() || tid.is_null() || slot.is_null() {
@@ -480,6 +516,7 @@ pub extern "C-unwind" fn kasate_tuple_satisfies_snapshot(
     snapshot: pg_sys::Snapshot,
 ) -> bool {
     unsafe {
+        pgrx::warning!("[KASATE] ===== tuple_satisfies_snapshot called =====");
         if relation.is_null() || slot.is_null() || snapshot.is_null() {
             return false;
         }
@@ -498,6 +535,23 @@ pub extern "C-unwind" fn kasate_tuple_satisfies_snapshot(
         } else {
             false
         }
+    }
+}
+
+// ============================================================================
+// Bulk insert callbacks
+// ============================================================================
+
+#[pg_guard]
+pub extern "C-unwind" fn kasate_finish_bulk_insert(
+    relation: pg_sys::Relation,
+    _options: std::os::raw::c_int,
+) {
+    unsafe {
+        pgrx::warning!("[KASATE] ===== finish_bulk_insert called =====");
+        let relation_oid = bridge::extract_relation_oid(relation).unwrap_or(0);
+        pgrx::warning!("[KASATE] finish_bulk_insert: relation_oid={}", relation_oid);
+        pgrx::warning!("[KASATE] ===== finish_bulk_insert completed =====");
     }
 }
 

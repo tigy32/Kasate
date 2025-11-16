@@ -70,7 +70,7 @@ impl RelationStorage {
         Self {
             tuples: BTreeMap::new(),
             next_block: 0,
-            next_offset: 0,
+            next_offset: 1, // Start from offset 1, as (0,0) might be considered invalid
         }
     }
 
@@ -138,7 +138,7 @@ impl RelationStorage {
         // Advance to next position
         self.next_offset += 1;
         if self.next_offset >= 1000 {
-            self.next_offset = 0;
+            self.next_offset = 1; // Wrap to 1, not 0
             self.next_block += 1;
         }
 

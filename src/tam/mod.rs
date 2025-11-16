@@ -49,10 +49,11 @@ pub extern "C-unwind" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInf
         routine_ref.tuple_insert = Some(kasate_tuple_insert);
         routine_ref.tuple_insert_speculative = None;
         routine_ref.tuple_complete_speculative = None;
-        routine_ref.multi_insert = None;
+        routine_ref.multi_insert = Some(kasate_multi_insert);
         routine_ref.tuple_delete = Some(kasate_tuple_delete);
         routine_ref.tuple_update = Some(kasate_tuple_update);
         routine_ref.tuple_lock = Some(kasate_tuple_lock);
+        routine_ref.finish_bulk_insert = Some(kasate_finish_bulk_insert);
 
         // Tuple fetch
         routine_ref.tuple_fetch_row_version = Some(kasate_tuple_fetch_row_version);
@@ -91,7 +92,7 @@ pub extern "C-unwind" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInf
 extern "C-unwind" fn kasate_slot_callbacks(_relation: pg_sys::Relation) -> *const pg_sys::TupleTableSlotOps {
     pgrx::warning!("[KASATE] slot_callbacks called");
     unsafe {
-        // Try using virtual tuple slot ops - simplest type
+        // Use Virtual tuple slot ops - simplest type with minimal requirements
         pgrx::warning!("[KASATE] Returning TTSOpsVirtual");
         &pg_sys::TTSOpsVirtual as *const _
     }
