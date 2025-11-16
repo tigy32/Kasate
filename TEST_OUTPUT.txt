@@ -1,0 +1,211 @@
+
+running 23 tests
+test bridge::tests::test_tuple_id_conversion ... ok
+test storage::relation::tests::test_relation_metadata ... ok
+test storage::tests::test_relation_storage_delete ... ok
+test storage::tests::test_relation_storage_insert ... ok
+test storage::tests::test_relation_storage_scan ... ok
+test storage::tests::test_relation_storage_update ... ok
+test storage::tests::test_storage_manager ... ok
+test storage::tests::test_tuple_id_ordering ... ok
+test storage::tests::test_tuple_visibility ... ok
+test storage::transaction::tests::test_snapshot_visibility ... ok
+test storage::transaction::tests::test_xid_allocator ... ok
+test storage::tuple::tests::test_tuple_desc ... ok
+test storage::tuple::tests::test_tuple_slot ... ok
+test tam::scan::tests::test_scan_desc_creation ... ok
+test tam::scan::tests::test_scan_iteration ... ok
+test tam::scan::tests::test_scan_rescan ... ok
+test tam::tests::test_tableam_handler_not_null ... ok
+[32m[1m    Building[0m[39m extension with features [36mpg_test pg16[39m
+[32m[1m     Running[0m[39m command [36m"/root/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/cargo" "build" "--lib" "--features" "pg_test pg16" "--no-default-features" "--message-format=json-render-diagnostics"[39m
+[32m[1m  Installing[0m[39m extension
+[32m[1m     Copying[0m[39m control file to [36m/usr/share/postgresql/16/extension/kasate.control[39m
+[32m[1m     Copying[0m[39m shared library to [36m/usr/lib/postgresql/16/lib/kasate.so[39m
+test tests::pg_test_multiple_relations ... FAILED
+test tests::pg_test_storage_delete ... FAILED
+test tests::pg_test_storage_insert ... FAILED
+test tests::pg_test_storage_scan ... FAILED
+test tests::pg_test_storage_update ... FAILED
+test tests::pg_test_tuple_visibility ... FAILED
+
+failures:
+
+---- tests::pg_test_multiple_relations stdout ----
+
+thread 'tests::pg_test_multiple_relations' (61873) panicked at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:214:14:
+Could not initialize test framework: Failure installing extension using command: CARGO_TARGET_DIR="/home/user/Kasate/target" "/root/.cargo/bin/cargo-pgrx" "pgrx" "install" "--test" "--pg-config" "/usr/bin/pg_config" "--features" "pg_test"
+
+
+
+Location:
+    /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:384:20
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/std/src/panicking.rs:698:5
+   1: core::panicking::panic_fmt
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/panicking.rs:75:14
+   2: core::result::unwrap_failed
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/result.rs:1855:5
+   3: core::result::Result<T,E>::expect
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/result.rs:1178:23
+   4: pgrx_tests::framework::get_test_framework
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:214:14
+   5: pgrx_tests::framework::run_test
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:117:41
+   6: kasate::tests::pg_test_multiple_relations
+             at ./src/lib.rs:138:5
+   7: kasate::tests::pg_test_multiple_relations::{{closure}}
+             at ./src/lib.rs:138:15
+   8: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+   9: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- tests::pg_test_storage_delete stdout ----
+
+thread 'tests::pg_test_storage_delete' (61874) panicked at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:207:13:
+Could not obtain test mutex. A previous test may have hard-aborted while holding it.
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/std/src/panicking.rs:698:5
+   1: core::panicking::panic_fmt
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/panicking.rs:75:14
+   2: pgrx_tests::framework::get_test_framework::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:207:13
+   3: core::result::Result<T,E>::unwrap_or_else
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/result.rs:1615:23
+   4: pgrx_tests::framework::get_test_framework
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:203:10
+   5: pgrx_tests::framework::run_test
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:117:41
+   6: kasate::tests::pg_test_storage_delete
+             at ./src/lib.rs:85:5
+   7: kasate::tests::pg_test_storage_delete::{{closure}}
+             at ./src/lib.rs:85:15
+   8: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+   9: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- tests::pg_test_storage_insert stdout ----
+
+thread 'tests::pg_test_storage_insert' (61875) panicked at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:207:13:
+Could not obtain test mutex. A previous test may have hard-aborted while holding it.
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/std/src/panicking.rs:698:5
+   1: core::panicking::panic_fmt
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/panicking.rs:75:14
+   2: pgrx_tests::framework::get_test_framework::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:207:13
+   3: core::result::Result<T,E>::unwrap_or_else
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/result.rs:1615:23
+   4: pgrx_tests::framework::get_test_framework
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:203:10
+   5: pgrx_tests::framework::run_test
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:117:41
+   6: kasate::tests::pg_test_storage_insert
+             at ./src/lib.rs:63:5
+   7: kasate::tests::pg_test_storage_insert::{{closure}}
+             at ./src/lib.rs:63:15
+   8: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+   9: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- tests::pg_test_storage_scan stdout ----
+
+thread 'tests::pg_test_storage_scan' (61876) panicked at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:207:13:
+Could not obtain test mutex. A previous test may have hard-aborted while holding it.
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/std/src/panicking.rs:698:5
+   1: core::panicking::panic_fmt
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/panicking.rs:75:14
+   2: pgrx_tests::framework::get_test_framework::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:207:13
+   3: core::result::Result<T,E>::unwrap_or_else
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/result.rs:1615:23
+   4: pgrx_tests::framework::get_test_framework
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:203:10
+   5: pgrx_tests::framework::run_test
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:117:41
+   6: kasate::tests::pg_test_storage_scan
+             at ./src/lib.rs:97:5
+   7: kasate::tests::pg_test_storage_scan::{{closure}}
+             at ./src/lib.rs:97:15
+   8: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+   9: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- tests::pg_test_storage_update stdout ----
+
+thread 'tests::pg_test_storage_update' (61877) panicked at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:207:13:
+Could not obtain test mutex. A previous test may have hard-aborted while holding it.
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/std/src/panicking.rs:698:5
+   1: core::panicking::panic_fmt
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/panicking.rs:75:14
+   2: pgrx_tests::framework::get_test_framework::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:207:13
+   3: core::result::Result<T,E>::unwrap_or_else
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/result.rs:1615:23
+   4: pgrx_tests::framework::get_test_framework
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:203:10
+   5: pgrx_tests::framework::run_test
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:117:41
+   6: kasate::tests::pg_test_storage_update
+             at ./src/lib.rs:72:5
+   7: kasate::tests::pg_test_storage_update::{{closure}}
+             at ./src/lib.rs:72:15
+   8: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+   9: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+---- tests::pg_test_tuple_visibility stdout ----
+
+thread 'tests::pg_test_tuple_visibility' (61878) panicked at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:207:13:
+Could not obtain test mutex. A previous test may have hard-aborted while holding it.
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/std/src/panicking.rs:698:5
+   1: core::panicking::panic_fmt
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/panicking.rs:75:14
+   2: pgrx_tests::framework::get_test_framework::{{closure}}
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:207:13
+   3: core::result::Result<T,E>::unwrap_or_else
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/result.rs:1615:23
+   4: pgrx_tests::framework::get_test_framework
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:203:10
+   5: pgrx_tests::framework::run_test
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pgrx-tests-0.16.1/src/framework.rs:117:41
+   6: kasate::tests::pg_test_tuple_visibility
+             at ./src/lib.rs:117:5
+   7: kasate::tests::pg_test_tuple_visibility::{{closure}}
+             at ./src/lib.rs:117:15
+   8: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+   9: core::ops::function::FnOnce::call_once
+             at /rustc/ed61e7d7e242494fb7057f2657300d9e77bb4fcb/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+
+failures:
+    tests::pg_test_multiple_relations
+    tests::pg_test_storage_delete
+    tests::pg_test_storage_insert
+    tests::pg_test_storage_scan
+    tests::pg_test_storage_update
+    tests::pg_test_tuple_visibility
+
+test result: FAILED. 17 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.26s
+
