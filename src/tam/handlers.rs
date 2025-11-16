@@ -104,7 +104,10 @@ pub extern "C-unwind" fn kasate_scan_getnextslot(
     slot: *mut pg_sys::TupleTableSlot,
 ) -> bool {
     unsafe {
+        pgrx::warning!("[KASATE] scan_getnextslot called");
+
         if scan.is_null() || slot.is_null() {
+            pgrx::warning!("[KASATE] scan_getnextslot: scan or slot is null");
             return false;
         }
 
@@ -112,20 +115,27 @@ pub extern "C-unwind" fn kasate_scan_getnextslot(
 
         // Get scan descriptor from HashMap
         let hash_key = scan as usize;
+        pgrx::warning!("[KASATE] scan_getnextslot: hash_key={}", hash_key);
+
         let mut descriptors = SCAN_DESCRIPTORS.lock().unwrap();
         let tuple_opt = if let Some(scan_desc) = descriptors.get_mut(&hash_key) {
+            pgrx::warning!("[KASATE] scan_getnextslot: found scan descriptor");
             // Get next tuple from our scan and clone it
             scan_desc.next_tuple().cloned()
         } else {
+            pgrx::warning!("[KASATE] scan_getnextslot: scan descriptor not found");
             None
         };
         drop(descriptors); // Release lock before calling other functions
 
         if let Some(tuple) = tuple_opt {
+            pgrx::warning!("[KASATE] scan_getnextslot: found tuple, storing in slot");
             // Store tuple in slot
             store_tuple_in_slot(slot, &tuple, scan_ref.rs_rd);
+            pgrx::warning!("[KASATE] scan_getnextslot: returning true");
             true
         } else {
+            pgrx::warning!("[KASATE] scan_getnextslot: no more tuples");
             // No more tuples
             clear_tuple_slot(slot);
             false
@@ -240,25 +250,50 @@ pub extern "C-unwind" fn kasate_tuple_insert(
     _bistate: *mut pg_sys::BulkInsertStateData,
 ) {
     unsafe {
+        pgrx::warning!("[KASATE] tuple_insert called");
+
         if relation.is_null() || slot.is_null() {
+            pgrx::warning!("[KASATE] ERROR: relation or slot is null");
             return;
         }
 
         let relation_oid = bridge::extract_relation_oid(relation).unwrap_or(0);
         let xid = bridge::get_current_transaction_id();
+        pgrx::warning!("[KASATE] relation_oid={}, xid={}", relation_oid, xid);
+
+        // Get tuple descriptor for proper tuple construction
+        let slot_ref = &*slot;
+        let tupdesc = slot_ref.tts_tupleDescriptor;
+
+        if tupdesc.is_null() {
+            pgrx::warning!("[KASATE] ERROR: tuple descriptor is null");
+            return;
+        }
 
         // Extract tuple data from slot
-        if let Some(tuple_data) = extract_tuple_from_slot(slot) {
-            // Insert into storage
-            let storage = STORAGE.get_or_create_relation(relation_oid);
-            let mut storage_guard = storage.write().unwrap();
-            let tid = storage_guard.insert(tuple_data, xid);
+        match extract_tuple_from_slot(slot) {
+            Some(tuple_data) => {
+                pgrx::warning!("[KASATE] Extracted {} bytes of tuple data", tuple_data.len());
 
-            // Update slot with the new TID
-            let slot_ref = &mut *slot;
-            let item_ptr = bridge::tuple_id_to_item_pointer(tid);
-            slot_ref.tts_tid = item_ptr;
+                // Insert into storage
+                let storage = STORAGE.get_or_create_relation(relation_oid);
+                let mut storage_guard = storage.write().unwrap();
+                let tid = storage_guard.insert(tuple_data, xid);
+                pgrx::warning!("[KASATE] Inserted tuple with TID: block={}, offset={}", tid.block, tid.offset);
+
+                // Release write lock
+                drop(storage_guard);
+
+                // DO NOT modify the slot! It's input-only.
+                // PostgreSQL will handle setting the TID through other mechanisms.
+                pgrx::warning!("[KASATE] Tuple stored with TID: block={}, offset={}", tid.block, tid.offset);
+            }
+            None => {
+                pgrx::warning!("[KASATE] ERROR: Failed to extract tuple data from slot");
+            }
         }
+
+        pgrx::warning!("[KASATE] tuple_insert completed");
     }
 }
 
@@ -386,7 +421,10 @@ pub extern "C-unwind" fn kasate_tuple_fetch_row_version(
     slot: *mut pg_sys::TupleTableSlot,
 ) -> bool {
     unsafe {
+        pgrx::warning!("[KASATE] tuple_fetch_row_version called");
+
         if relation.is_null() || tid.is_null() || slot.is_null() {
+            pgrx::warning!("[KASATE] tuple_fetch_row_version: null parameter");
             return false;
         }
 
@@ -394,18 +432,29 @@ pub extern "C-unwind" fn kasate_tuple_fetch_row_version(
         let tuple_id = bridge::item_pointer_to_tuple_id(*tid);
         let (snapshot_xmin, snapshot_xmax) = bridge::extract_snapshot_info(snapshot);
 
+        pgrx::warning!("[KASATE] tuple_fetch_row_version: relation_oid={}, tuple_id=({},{}), snapshot=({},{})",
+            relation_oid, tuple_id.block, tuple_id.offset, snapshot_xmin, snapshot_xmax);
+
         let storage = STORAGE.get_or_create_relation(relation_oid);
+        pgrx::warning!("[KASATE] tuple_fetch_row_version: got storage");
+
         let storage_guard = storage.read().unwrap();
+        pgrx::warning!("[KASATE] tuple_fetch_row_version: acquired read lock");
 
         if let Some(tuple) = storage_guard.get(tuple_id) {
+            pgrx::warning!("[KASATE] tuple_fetch_row_version: found tuple, checking visibility");
             if tuple.is_visible(snapshot_xmin, snapshot_xmax) {
+                pgrx::warning!("[KASATE] tuple_fetch_row_version: tuple is visible, storing in slot");
                 store_tuple_in_slot(slot, tuple, relation);
+                pgrx::warning!("[KASATE] tuple_fetch_row_version: returning true");
                 true
             } else {
+                pgrx::warning!("[KASATE] tuple_fetch_row_version: tuple not visible");
                 clear_tuple_slot(slot);
                 false
             }
         } else {
+            pgrx::warning!("[KASATE] tuple_fetch_row_version: tuple not found");
             clear_tuple_slot(slot);
             false
         }
@@ -543,17 +592,25 @@ pub extern "C-unwind" fn kasate_relation_size(
     relation: pg_sys::Relation,
     _forkNumber: pg_sys::ForkNumber::Type,
 ) -> u64 {
+    pgrx::warning!("[KASATE] relation_size called");
     unsafe {
         if relation.is_null() {
+            pgrx::warning!("[KASATE] relation_size: relation is null");
             return 0;
         }
 
         let relation_oid = bridge::extract_relation_oid(relation).unwrap_or(0);
+        pgrx::warning!("[KASATE] relation_size: oid={}", relation_oid);
+
         let storage = STORAGE.get_or_create_relation(relation_oid);
+        pgrx::warning!("[KASATE] relation_size: got storage");
+
         let storage_guard = storage.read().unwrap();
+        pgrx::warning!("[KASATE] relation_size: got read lock");
 
         // Estimate size based on number of tuples
         let tuple_count = storage_guard.len() as u64;
+        pgrx::warning!("[KASATE] relation_size: returning size for {} tuples", tuple_count);
         tuple_count * 8192 / 100 // Rough estimate
     }
 }
@@ -604,86 +661,116 @@ pub extern "C-unwind" fn kasate_relation_estimate_size(
 unsafe fn store_tuple_in_slot(
     slot: *mut pg_sys::TupleTableSlot,
     tuple: &crate::storage::Tuple,
-    relation: pg_sys::Relation,
+    _relation: pg_sys::Relation,
 ) {
+    pgrx::warning!("[KASATE] store_tuple_in_slot called");
+
     if slot.is_null() {
+        pgrx::warning!("[KASATE] store_tuple_in_slot: slot is null");
         return;
     }
 
-    let slot_ref = &mut *slot;
+    pgrx::warning!("[KASATE] store_tuple_in_slot: tuple_id=({},{}), xmin={}, xmax={}, data_len={}",
+        tuple.id.block, tuple.id.offset, tuple.xmin, tuple.xmax, tuple.data.len());
 
-    // Create a HeapTuple from our safe tuple
-    let tuple_size = tuple.data.len();
-    let heap_tuple = pg_sys::palloc0(
-        std::mem::size_of::<pg_sys::HeapTupleData>() + tuple_size
-    ) as *mut pg_sys::HeapTupleData;
+    // TEMPORARY FIX: Just clear the slot for now
+    // TODO: Properly reconstruct tuple data and call ExecStoreHeapTuple
+    // The issue is that our stored "data" is just raw Datum values,
+    // not a properly formatted HeapTuple with HeapTupleHeaderData
+    clear_tuple_slot(slot);
 
-    if !heap_tuple.is_null() {
-        let heap_tuple_ref = &mut *heap_tuple;
-        heap_tuple_ref.t_len = tuple_size as u32;
-
-        // Allocate and copy data
-        let data_ptr = pg_sys::palloc(tuple_size) as *mut pg_sys::HeapTupleHeaderData;
-        if !data_ptr.is_null() {
-            std::ptr::copy_nonoverlapping(
-                tuple.data.as_ptr(),
-                data_ptr as *mut u8,
-                tuple_size,
-            );
-            heap_tuple_ref.t_data = data_ptr;
-
-            // Set transaction info
-            let header_ref = &mut *data_ptr;
-            header_ref.t_choice.t_heap.t_xmin = tuple.xmin.into();
-            header_ref.t_choice.t_heap.t_xmax = tuple.xmax.into();
-        }
-
-        heap_tuple_ref.t_self = bridge::tuple_id_to_item_pointer(tuple.id);
-        heap_tuple_ref.t_tableOid = bridge::extract_relation_oid(relation).unwrap_or(0).into();
-
-        // Store the tuple in the slot
-        // In PGRX 0.16.1, we need to call through the function pointer in TupleTableSlotOps
-        slot_ref.tts_tid = heap_tuple_ref.t_self;
-        slot_ref.tts_flags = 0; // Mark as valid
-    }
+    pgrx::warning!("[KASATE] store_tuple_in_slot: cleared slot (tuple retrieval not yet implemented)");
 }
 
 unsafe fn extract_tuple_from_slot(slot: *mut pg_sys::TupleTableSlot) -> Option<Vec<u8>> {
     if slot.is_null() {
+        pgrx::warning!("[KASATE] extract_tuple_from_slot: slot is null");
         return None;
     }
 
     let slot_ref = &*slot;
+    pgrx::warning!("[KASATE] extract_tuple_from_slot: slot={:p}", slot);
 
     // Get the tuple from the slot using ops
     let ops = slot_ref.tts_ops;
     if ops.is_null() {
+        pgrx::warning!("[KASATE] extract_tuple_from_slot: ops is null");
         return None;
     }
 
-    // Try to get the heap tuple - different slots store it differently
-    // For heap tuple table slots, we can get minimal tuple
     let ops_ref = &*ops;
-    if ops_ref.get_minimal_tuple.is_some() {
-        // Materialize if needed
-        if ops_ref.materialize.is_some() {
-            ops_ref.materialize.unwrap()(slot);
-        }
+    pgrx::warning!("[KASATE] extract_tuple_from_slot: ops={:p}", ops);
 
-        // Access the values directly from the slot
-        // This is a workaround since tts_tuple is no longer accessible
-        // We'll create a minimal copy from the slot's values
-        let natts = slot_ref.tts_nvalid as usize;
-        if natts == 0 {
-            return None;
-        }
-
-        // For now, return an empty vec as a placeholder
-        // A full implementation would need to reconstruct the tuple from values
-        Some(Vec::new())
-    } else {
-        None
+    // Materialize the slot if needed
+    if ops_ref.materialize.is_some() {
+        pgrx::warning!("[KASATE] extract_tuple_from_slot: calling materialize");
+        ops_ref.materialize.unwrap()(slot);
+        pgrx::warning!("[KASATE] extract_tuple_from_slot: materialize completed");
     }
+
+    // Fallback: try to copy from values/nulls arrays
+    // This is more reliable than getting minimal tuple
+    // Use tuple descriptor's natts, not tts_nvalid (which may be 0 after materialize)
+    let tupdesc = slot_ref.tts_tupleDescriptor;
+    if tupdesc.is_null() {
+        pgrx::warning!("[KASATE] extract_tuple_from_slot: tupdesc is null");
+        return None;
+    }
+
+    let natts = (*tupdesc).natts as usize;
+    pgrx::warning!("[KASATE] extract_tuple_from_slot: natts={} (from tupdesc)", natts);
+
+    if natts > 0 && !slot_ref.tts_values.is_null() && !slot_ref.tts_isnull.is_null() {
+        pgrx::warning!("[KASATE] extract_tuple_from_slot: extracting from values/nulls arrays");
+
+        // Create a simple serialization of the slot data
+        // We'll store: number of attributes, then each value as 8 bytes
+        let mut data = Vec::with_capacity(8 + natts * 8);
+
+        // Store number of attributes
+        data.extend_from_slice(&(natts as u64).to_le_bytes());
+
+        // Store each value (simplified - just store the raw Datum value)
+        let values = std::slice::from_raw_parts(slot_ref.tts_values, natts);
+        let nulls = std::slice::from_raw_parts(slot_ref.tts_isnull, natts);
+
+        for i in 0..natts {
+            if nulls[i] {
+                // NULL value - store zeros
+                data.extend_from_slice(&0u64.to_le_bytes());
+            } else {
+                // Store the datum value
+                data.extend_from_slice(&values[i].value().to_le_bytes());
+            }
+        }
+
+        pgrx::warning!("[KASATE] extract_tuple_from_slot: extracted {} bytes", data.len());
+        return Some(data);
+    }
+
+    // Try to get minimal tuple as fallback
+    if ops_ref.get_minimal_tuple.is_some() {
+        pgrx::warning!("[KASATE] extract_tuple_from_slot: trying get_minimal_tuple");
+        let minimal_tuple = ops_ref.get_minimal_tuple.unwrap()(slot);
+        if !minimal_tuple.is_null() {
+            let mtup_ref = &*minimal_tuple;
+            let len = mtup_ref.t_len as usize;
+            pgrx::warning!("[KASATE] extract_tuple_from_slot: minimal tuple len={}", len);
+            if len > 0 && len < 1000000 {  // Sanity check
+                let data_ptr = minimal_tuple as *const u8;
+                let mut data = Vec::with_capacity(len);
+                std::ptr::copy_nonoverlapping(data_ptr, data.as_mut_ptr(), len);
+                data.set_len(len);
+                pgrx::warning!("[KASATE] extract_tuple_from_slot: copied {} bytes from minimal tuple", len);
+                return Some(data);
+            }
+        } else {
+            pgrx::warning!("[KASATE] extract_tuple_from_slot: minimal_tuple is null");
+        }
+    }
+
+    pgrx::warning!("[KASATE] extract_tuple_from_slot: returning None");
+    None
 }
 
 unsafe fn clear_tuple_slot(slot: *mut pg_sys::TupleTableSlot) {
