@@ -10,7 +10,6 @@ pub struct KasateScanDesc {
     pub relation_oid: u32,
     pub snapshot_xmin: u32,
     pub snapshot_xmax: u32,
-    pub keys: Vec<pg_sys::ScanKeyData>,
     pub iterator_state: Option<IteratorState>,
 }
 
@@ -26,7 +25,6 @@ impl KasateScanDesc {
             relation_oid,
             snapshot_xmin,
             snapshot_xmax,
-            keys: Vec::new(),
             iterator_state: None,
         }
     }

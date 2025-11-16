@@ -27,7 +27,7 @@ pub extern "C-unwind" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInf
         routine_ref.type_ = pg_sys::NodeTag::T_TableAmRoutine;
 
         // Slot callbacks
-        routine_ref.slot_callbacks = kasate_slot_callbacks;
+        routine_ref.slot_callbacks = Some(kasate_slot_callbacks);
 
         // Scan callbacks
         routine_ref.scan_begin = Some(kasate_scan_begin);
@@ -93,7 +93,7 @@ extern "C-unwind" fn kasate_slot_callbacks(_relation: pg_sys::Relation) -> *cons
     unsafe {
         // Use the heap tuple table slot ops for now
         // In a full implementation, we might want custom slot ops
-        pg_sys::TTSOpsHeapTuple.as_ptr()
+        &pg_sys::TTSOpsHeapTuple as *const _
     }
 }
 

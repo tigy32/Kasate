@@ -4,7 +4,16 @@ use pgrx::prelude::*;
 use crate::storage::{TupleId, STORAGE};
 use crate::bridge;
 use crate::tam::scan::{KasateScanDesc, KasateIndexFetchDesc};
-use std::ptr;
+use std::collections::HashMap;
+use std::sync::Mutex;
+
+// Global storage for scan descriptors (workaround for removed opaque fields)
+lazy_static::lazy_static! {
+    static ref SCAN_DESCRIPTORS: Mutex<HashMap<usize, Box<KasateScanDesc>>> =
+        Mutex::new(HashMap::new());
+    static ref FETCH_DESCRIPTORS: Mutex<HashMap<usize, Box<KasateIndexFetchDesc>>> =
+        Mutex::new(HashMap::new());
+}
 
 // ============================================================================
 // Scan callbacks
@@ -45,8 +54,9 @@ pub extern "C-unwind" fn kasate_scan_begin(
             pg_scan_ref.rs_key = key;
             pg_scan_ref.rs_flags = flags;
 
-            // Store our scan descriptor in the opaque field
-            pg_scan_ref.rs_scan_opaque = Box::into_raw(scan_desc) as *mut std::ffi::c_void;
+            // Store our scan descriptor in global HashMap
+            let key = pg_scan as usize;
+            SCAN_DESCRIPTORS.lock().unwrap().insert(key, scan_desc);
         }
 
         pg_scan
@@ -57,14 +67,9 @@ pub extern "C-unwind" fn kasate_scan_begin(
 pub extern "C-unwind" fn kasate_scan_end(scan: pg_sys::TableScanDesc) {
     unsafe {
         if !scan.is_null() {
-            let scan_ref = &*scan;
-            if !scan_ref.rs_scan_opaque.is_null() {
-                // Reclaim our scan descriptor
-                let _scan_desc = Box::from_raw(
-                    scan_ref.rs_scan_opaque as *mut KasateScanDesc
-                );
-                // It will be dropped here
-            }
+            // Remove our scan descriptor from global HashMap
+            let key = scan as usize;
+            SCAN_DESCRIPTORS.lock().unwrap().remove(&key);
         }
     }
 }
@@ -83,8 +88,9 @@ pub extern "C-unwind" fn kasate_scan_rescan(
             let scan_ref = &mut *scan;
             scan_ref.rs_key = key;
 
-            if !scan_ref.rs_scan_opaque.is_null() {
-                let scan_desc = &mut *(scan_ref.rs_scan_opaque as *mut KasateScanDesc);
+            // Get scan descriptor from HashMap
+            let hash_key = scan as usize;
+            if let Some(scan_desc) = SCAN_DESCRIPTORS.lock().unwrap().get_mut(&hash_key) {
                 scan_desc.rescan();
             }
         }
@@ -103,16 +109,21 @@ pub extern "C-unwind" fn kasate_scan_getnextslot(
         }
 
         let scan_ref = &mut *scan;
-        if scan_ref.rs_scan_opaque.is_null() {
-            return false;
-        }
 
-        let scan_desc = &mut *(scan_ref.rs_scan_opaque as *mut KasateScanDesc);
+        // Get scan descriptor from HashMap
+        let hash_key = scan as usize;
+        let mut descriptors = SCAN_DESCRIPTORS.lock().unwrap();
+        let tuple_opt = if let Some(scan_desc) = descriptors.get_mut(&hash_key) {
+            // Get next tuple from our scan and clone it
+            scan_desc.next_tuple().cloned()
+        } else {
+            None
+        };
+        drop(descriptors); // Release lock before calling other functions
 
-        // Get next tuple from our scan
-        if let Some(tuple) = scan_desc.next_tuple() {
+        if let Some(tuple) = tuple_opt {
             // Store tuple in slot
-            store_tuple_in_slot(slot, tuple, scan_ref.rs_rd);
+            store_tuple_in_slot(slot, &tuple, scan_ref.rs_rd);
             true
         } else {
             // No more tuples
@@ -150,7 +161,10 @@ pub extern "C-unwind" fn kasate_index_fetch_begin(
         if !pg_fetch.is_null() {
             let pg_fetch_ref = &mut *pg_fetch;
             pg_fetch_ref.rel = relation;
-            pg_fetch_ref.opaque = Box::into_raw(fetch_desc) as *mut std::ffi::c_void;
+
+            // Store our fetch descriptor in global HashMap
+            let key = pg_fetch as usize;
+            FETCH_DESCRIPTORS.lock().unwrap().insert(key, fetch_desc);
         }
 
         pg_fetch
@@ -169,13 +183,9 @@ pub extern "C-unwind" fn kasate_index_fetch_reset(fetch: *mut pg_sys::IndexFetch
 pub extern "C-unwind" fn kasate_index_fetch_end(fetch: *mut pg_sys::IndexFetchTableData) {
     unsafe {
         if !fetch.is_null() {
-            let fetch_ref = &*fetch;
-            if !fetch_ref.opaque.is_null() {
-                let _fetch_desc = Box::from_raw(
-                    fetch_ref.opaque as *mut KasateIndexFetchDesc
-                );
-                // It will be dropped here
-            }
+            // Remove our fetch descriptor from global HashMap
+            let key = fetch as usize;
+            FETCH_DESCRIPTORS.lock().unwrap().remove(&key);
         }
     }
 }
@@ -195,18 +205,23 @@ pub extern "C-unwind" fn kasate_index_fetch_tuple(
         }
 
         let fetch_ref = &*fetch;
-        if fetch_ref.opaque.is_null() {
-            return false;
-        }
 
-        let fetch_desc = &*(fetch_ref.opaque as *const KasateIndexFetchDesc);
-        let tuple_id = bridge::item_pointer_to_tuple_id(*tid);
+        // Get fetch descriptor from HashMap
+        let hash_key = fetch as usize;
+        let descriptors = FETCH_DESCRIPTORS.lock().unwrap();
+        if let Some(fetch_desc) = descriptors.get(&hash_key) {
+            let tuple_id = bridge::item_pointer_to_tuple_id(*tid);
 
-        if let Some(tuple) = fetch_desc.fetch_tuple(tuple_id) {
-            store_tuple_in_slot(slot, &tuple, fetch_ref.rel);
-            true
+            if let Some(tuple) = fetch_desc.fetch_tuple(tuple_id) {
+                drop(descriptors); // Release lock
+                store_tuple_in_slot(slot, &tuple, fetch_ref.rel);
+                true
+            } else {
+                drop(descriptors); // Release lock
+                clear_tuple_slot(slot);
+                false
+            }
         } else {
-            clear_tuple_slot(slot);
             false
         }
     }
