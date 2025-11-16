@@ -1,7 +1,7 @@
 // TAM handler implementations
 
 use pgrx::prelude::*;
-use crate::storage::{TupleId, STORAGE};
+use crate::storage::STORAGE;
 use crate::bridge;
 use crate::tam::scan::{KasateScanDesc, KasateIndexFetchDesc};
 use std::collections::HashMap;

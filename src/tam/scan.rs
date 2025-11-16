@@ -1,9 +1,6 @@
 // Scan implementation for Kasate table access method
 
-use pgrx::prelude::*;
 use crate::storage::{TupleId, Tuple, STORAGE};
-use crate::bridge;
-use std::sync::Arc;
 
 /// Scan descriptor - stores state for sequential scans
 pub struct KasateScanDesc {

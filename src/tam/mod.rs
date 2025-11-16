@@ -5,7 +5,6 @@ pub mod scan;
 pub mod handlers;
 
 use pgrx::prelude::*;
-use std::ffi::CStr;
 
 // Forward declarations for handler functions
 use handlers::*;
