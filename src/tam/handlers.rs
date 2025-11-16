@@ -259,6 +259,8 @@ pub extern "C-unwind" fn kasate_tuple_insert(
 ) {
     unsafe {
         pgrx::warning!("[KASATE] tuple_insert called");
+        pgrx::warning!("[KASATE] relation pointer: {:p}, slot pointer: {:p}, _bistate pointer: {:p}",
+            relation, slot, _bistate);
 
         if relation.is_null() || slot.is_null() {
             pgrx::warning!("[KASATE] ERROR: relation or slot is null");
@@ -289,15 +291,8 @@ pub extern "C-unwind" fn kasate_tuple_insert(
 
         pgrx::warning!("[KASATE] Tuple stored with TID=({},{})", tuple_id.block, tuple_id.offset);
 
-        // Set the TID in the slot to match what we stored
-        let slot_mut = &mut *slot;
-        let tid = &mut slot_mut.tts_tid as *mut pg_sys::ItemPointerData;
-        pg_sys::ItemPointerSet(tid, tuple_id.block, tuple_id.offset);
-        pgrx::warning!("[KASATE] Slot TID set to match storage");
-
-        // CRITICAL: Set the tableOid in the slot - PostgreSQL might check this!
-        slot_mut.tts_tableOid = pg_sys::Oid::from(relation_oid);
-        pgrx::warning!("[KASATE] Slot tableOid set to {}", relation_oid);
+        // EXPERIMENT: Try NOT modifying the slot at all - maybe PostgreSQL handles this?
+        pgrx::warning!("[KASATE] Leaving slot unmodified");
 
         pgrx::warning!("[KASATE] tuple_insert completed");
     }

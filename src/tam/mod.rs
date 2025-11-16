@@ -13,12 +13,20 @@ use handlers::*;
 #[pg_guard]
 pub extern "C-unwind" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInfo) -> pg_sys::Datum {
     unsafe {
+        pgrx::warning!("[KASATE] ===== tableam_handler called =====");
+
+        // Allocate in CacheMemoryContext to ensure it persists across transactions
+        let old_context = pg_sys::MemoryContextSwitchTo(pg_sys::CacheMemoryContext);
+
         let routine = pg_sys::palloc0(std::mem::size_of::<pg_sys::TableAmRoutine>())
             as *mut pg_sys::TableAmRoutine;
 
         if routine.is_null() {
+            pg_sys::MemoryContextSwitchTo(old_context);
             panic!("Failed to allocate TableAmRoutine");
         }
+
+        pgrx::warning!("[KASATE] TableAmRoutine allocated at {:p}", routine);
 
         let routine_ref = &mut *routine;
 
@@ -83,6 +91,10 @@ pub extern "C-unwind" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInf
         routine_ref.scan_sample_next_block = None;
         routine_ref.scan_sample_next_tuple = None;
 
+        // Switch back to the original memory context
+        pg_sys::MemoryContextSwitchTo(old_context);
+
+        pgrx::warning!("[KASATE] ===== tableam_handler completed =====");
         pg_sys::Datum::from(routine as *mut std::ffi::c_void)
     }
 }
@@ -92,9 +104,10 @@ pub extern "C-unwind" fn kasate_tableam_handler(_fcinfo: pg_sys::FunctionCallInf
 extern "C-unwind" fn kasate_slot_callbacks(_relation: pg_sys::Relation) -> *const pg_sys::TupleTableSlotOps {
     pgrx::warning!("[KASATE] slot_callbacks called");
     unsafe {
-        // Use Virtual tuple slot ops - simplest type with minimal requirements
-        pgrx::warning!("[KASATE] Returning TTSOpsVirtual");
-        &pg_sys::TTSOpsVirtual as *const _
+        // Try MinimalTuple instead of Virtual - different internal representation
+        let ops_ptr = std::ptr::addr_of!(pg_sys::TTSOpsMinimalTuple);
+        pgrx::warning!("[KASATE] Returning TTSOpsMinimalTuple at {:p}", ops_ptr);
+        ops_ptr
     }
 }
 
