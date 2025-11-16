@@ -28,8 +28,10 @@ pub extern "C-unwind" fn kasate_scan_begin(
     _pscan: pg_sys::ParallelTableScanDesc,
     flags: u32,
 ) -> pg_sys::TableScanDesc {
+    pgrx::warning!("[KASATE] scan_begin called");
     unsafe {
         let relation_oid = bridge::extract_relation_oid(relation).unwrap_or(0);
+        pgrx::warning!("[KASATE] scan_begin: relation_oid={}", relation_oid);
         let (snapshot_xmin, snapshot_xmax) = bridge::extract_snapshot_info(snapshot);
 
         // Create our scan descriptor
@@ -65,8 +67,10 @@ pub extern "C-unwind" fn kasate_scan_begin(
 
 #[pg_guard]
 pub extern "C-unwind" fn kasate_scan_end(scan: pg_sys::TableScanDesc) {
+    pgrx::warning!("[KASATE] scan_end called");
     unsafe {
         if !scan.is_null() {
+            pgrx::warning!("[KASATE] scan_end: removing scan descriptor");
             // Remove our scan descriptor from global HashMap
             let key = scan as usize;
             SCAN_DESCRIPTORS.lock().unwrap().remove(&key);
@@ -151,8 +155,10 @@ pub extern "C-unwind" fn kasate_scan_getnextslot(
 pub extern "C-unwind" fn kasate_index_fetch_begin(
     relation: pg_sys::Relation,
 ) -> *mut pg_sys::IndexFetchTableData {
+    pgrx::warning!("[KASATE] index_fetch_begin called");
     unsafe {
         let relation_oid = bridge::extract_relation_oid(relation).unwrap_or(0);
+        pgrx::warning!("[KASATE] index_fetch_begin: relation_oid={}", relation_oid);
 
         // For now, use a simple snapshot
         let snapshot_xmin = 0;
@@ -183,6 +189,7 @@ pub extern "C-unwind" fn kasate_index_fetch_begin(
 
 #[pg_guard]
 pub extern "C-unwind" fn kasate_index_fetch_reset(fetch: *mut pg_sys::IndexFetchTableData) {
+    pgrx::warning!("[KASATE] index_fetch_reset called");
     // Nothing to reset in our implementation
     if fetch.is_null() {
         return;
@@ -191,6 +198,7 @@ pub extern "C-unwind" fn kasate_index_fetch_reset(fetch: *mut pg_sys::IndexFetch
 
 #[pg_guard]
 pub extern "C-unwind" fn kasate_index_fetch_end(fetch: *mut pg_sys::IndexFetchTableData) {
+    pgrx::warning!("[KASATE] index_fetch_end called");
     unsafe {
         if !fetch.is_null() {
             // Remove our fetch descriptor from global HashMap
@@ -308,6 +316,7 @@ pub extern "C-unwind" fn kasate_tuple_delete(
     _tmfd: *mut pg_sys::TM_FailureData,
     _changingPart: bool,
 ) -> pg_sys::TM_Result::Type {
+    pgrx::warning!("[KASATE] tuple_delete called");
     unsafe {
         if relation.is_null() || tid.is_null() {
             return pg_sys::TM_Result::TM_Invisible;
@@ -341,6 +350,7 @@ pub extern "C-unwind" fn kasate_tuple_update(
     _lockmode: *mut pg_sys::LockTupleMode::Type,
     _update_indexes: *mut pg_sys::TU_UpdateIndexes::Type,
 ) -> pg_sys::TM_Result::Type {
+    pgrx::warning!("[KASATE] tuple_update called");
     unsafe {
         if relation.is_null() || otid.is_null() || slot.is_null() {
             return pg_sys::TM_Result::TM_Invisible;
@@ -381,6 +391,7 @@ pub extern "C-unwind" fn kasate_tuple_lock(
     _flags: u8,
     _tmfd: *mut pg_sys::TM_FailureData,
 ) -> pg_sys::TM_Result::Type {
+    pgrx::warning!("[KASATE] tuple_lock called");
     // Simplified lock implementation - just verify tuple exists and is visible
     unsafe {
         if relation.is_null() || tid.is_null() {
@@ -522,6 +533,7 @@ pub extern "C-unwind" fn kasate_relation_set_new_filelocator(
     _freeze_xid: *mut pg_sys::TransactionId,
     _minmulti: *mut pg_sys::MultiXactId,
 ) {
+    pgrx::warning!("[KASATE] relation_set_new_filelocator called");
     unsafe {
         if !relation.is_null() {
             let relation_oid = bridge::extract_relation_oid(relation).unwrap_or(0);
@@ -539,6 +551,7 @@ pub extern "C-unwind" fn kasate_relation_vacuum(
     _params: *mut pg_sys::VacuumParams,
     _bstrategy: pg_sys::BufferAccessStrategy,
 ) {
+    pgrx::warning!("[KASATE] relation_vacuum called");
     // Simplified vacuum - in a real implementation, this would clean up dead tuples
     unsafe {
         if !relation.is_null() {
@@ -701,16 +714,8 @@ unsafe fn extract_tuple_from_slot(slot: *mut pg_sys::TupleTableSlot) -> Option<V
     let ops_ref = &*ops;
     pgrx::warning!("[KASATE] extract_tuple_from_slot: ops={:p}", ops);
 
-    // Materialize the slot if needed
-    if ops_ref.materialize.is_some() {
-        pgrx::warning!("[KASATE] extract_tuple_from_slot: calling materialize");
-        ops_ref.materialize.unwrap()(slot);
-        pgrx::warning!("[KASATE] extract_tuple_from_slot: materialize completed");
-    }
-
-    // Fallback: try to copy from values/nulls arrays
-    // This is more reliable than getting minimal tuple
-    // Use tuple descriptor's natts, not tts_nvalid (which may be 0 after materialize)
+    // Get tuple descriptor first to know how many attributes to fetch
+    let slot_ref = &*slot;
     let tupdesc = slot_ref.tts_tupleDescriptor;
     if tupdesc.is_null() {
         pgrx::warning!("[KASATE] extract_tuple_from_slot: tupdesc is null");
@@ -720,56 +725,86 @@ unsafe fn extract_tuple_from_slot(slot: *mut pg_sys::TupleTableSlot) -> Option<V
     let natts = (*tupdesc).natts as usize;
     pgrx::warning!("[KASATE] extract_tuple_from_slot: natts={} (from tupdesc)", natts);
 
+    // DO NOT call getsomeattrs - it corrupts the slot!
+    // The slot should already be materialized when passed to us
+    // Just use the data that's already there
+
+    // Extract values properly by making deep copies of variable-length data
     if natts > 0 && !slot_ref.tts_values.is_null() && !slot_ref.tts_isnull.is_null() {
         pgrx::warning!("[KASATE] extract_tuple_from_slot: extracting from values/nulls arrays");
 
-        // Create a simple serialization of the slot data
-        // We'll store: number of attributes, then each value as 8 bytes
-        let mut data = Vec::with_capacity(8 + natts * 8);
-
-        // Store number of attributes
-        data.extend_from_slice(&(natts as u64).to_le_bytes());
-
-        // Store each value (simplified - just store the raw Datum value)
         let values = std::slice::from_raw_parts(slot_ref.tts_values, natts);
         let nulls = std::slice::from_raw_parts(slot_ref.tts_isnull, natts);
+        let attrs = std::slice::from_raw_parts((*tupdesc).attrs.as_ptr(), natts);
+
+        // Collect all attribute data first (making deep copies as needed)
+        let mut attr_data: Vec<Vec<u8>> = Vec::with_capacity(natts);
 
         for i in 0..natts {
             if nulls[i] {
-                // NULL value - store zeros
-                data.extend_from_slice(&0u64.to_le_bytes());
+                // NULL value
+                attr_data.push(vec![0]); // Store a marker for NULL
             } else {
-                // Store the datum value
-                data.extend_from_slice(&values[i].value().to_le_bytes());
+                let attr = &attrs[i];  // attrs is already a slice of structs, not pointers
+                let datum = values[i];
+
+                // For variable-length types (typlen = -1), we need to copy the actual data
+                if attr.attlen == -1 {
+                    // Variable length - it's a varlena structure
+                    let varlena_ptr = datum.value() as *const u8;
+                    if !varlena_ptr.is_null() {
+                        // Check the first byte to determine header type
+                        let first_byte = *varlena_ptr;
+
+                        let actual_size = if (first_byte & 0x01) == 0 {
+                            // 4-byte header (long form)
+                            // Size is in the first 4 bytes, big-endian, shifted right by 2
+                            let mut size_word = [0u8; 4];
+                            std::ptr::copy_nonoverlapping(varlena_ptr, size_word.as_mut_ptr(), 4);
+                            let size_raw = u32::from_be_bytes(size_word);  // Big-endian!
+                            (size_raw >> 2) as usize  // Shift right by 2 to get actual size
+                        } else {
+                            // 1-byte header (short form)
+                            // Size is in the first byte, shifted right by 1
+                            (first_byte >> 1) as usize
+                        };
+
+                        pgrx::warning!("[KASATE] extract_tuple_from_slot: attr {} is varlen, size={}", i, actual_size);
+
+                        if actual_size > 0 && actual_size < 1000000 {
+                            let mut bytes = vec![0u8; actual_size];
+                            std::ptr::copy_nonoverlapping(varlena_ptr, bytes.as_mut_ptr(), actual_size);
+                            attr_data.push(bytes);
+                        } else {
+                            attr_data.push(vec![0]);
+                        }
+                    } else {
+                        attr_data.push(vec![0]); // NULL-like
+                    }
+                } else {
+                    // Fixed length - just copy the datum value
+                    pgrx::warning!("[KASATE] extract_tuple_from_slot: attr {} is fixed len={}", i, attr.attlen);
+                    attr_data.push(datum.value().to_le_bytes().to_vec());
+                }
             }
         }
 
-        pgrx::warning!("[KASATE] extract_tuple_from_slot: extracted {} bytes", data.len());
+        // Now serialize all the data
+        let mut data = Vec::new();
+        // Store number of attributes
+        data.extend_from_slice(&(natts as u64).to_le_bytes());
+
+        // Store each attribute's size and data
+        for attr_bytes in &attr_data {
+            data.extend_from_slice(&(attr_bytes.len() as u64).to_le_bytes());
+            data.extend_from_slice(attr_bytes);
+        }
+
+        pgrx::warning!("[KASATE] extract_tuple_from_slot: extracted {} total bytes", data.len());
         return Some(data);
     }
 
-    // Try to get minimal tuple as fallback
-    if ops_ref.get_minimal_tuple.is_some() {
-        pgrx::warning!("[KASATE] extract_tuple_from_slot: trying get_minimal_tuple");
-        let minimal_tuple = ops_ref.get_minimal_tuple.unwrap()(slot);
-        if !minimal_tuple.is_null() {
-            let mtup_ref = &*minimal_tuple;
-            let len = mtup_ref.t_len as usize;
-            pgrx::warning!("[KASATE] extract_tuple_from_slot: minimal tuple len={}", len);
-            if len > 0 && len < 1000000 {  // Sanity check
-                let data_ptr = minimal_tuple as *const u8;
-                let mut data = Vec::with_capacity(len);
-                std::ptr::copy_nonoverlapping(data_ptr, data.as_mut_ptr(), len);
-                data.set_len(len);
-                pgrx::warning!("[KASATE] extract_tuple_from_slot: copied {} bytes from minimal tuple", len);
-                return Some(data);
-            }
-        } else {
-            pgrx::warning!("[KASATE] extract_tuple_from_slot: minimal_tuple is null");
-        }
-    }
-
-    pgrx::warning!("[KASATE] extract_tuple_from_slot: returning None");
+    pgrx::warning!("[KASATE] extract_tuple_from_slot: no extraction method worked, returning None");
     None
 }
 

@@ -27,19 +27,28 @@ impl KasateScanDesc {
     }
 
     pub fn init_scan(&mut self) {
+        pgrx::warning!("[KASATE-SCAN] init_scan: relation_oid={}, snapshot=({},{})",
+            self.relation_oid, self.snapshot_xmin, self.snapshot_xmax);
+
         // Collect all visible tuples into a vector for iteration
         let storage = STORAGE.get_or_create_relation(self.relation_oid);
         let storage_guard = storage.read().unwrap();
+
+        pgrx::warning!("[KASATE-SCAN] init_scan: storage has {} total tuples", storage_guard.len());
 
         let mut tuples = Vec::new();
         storage_guard.scan_visible(
             self.snapshot_xmin,
             self.snapshot_xmax,
             |tid, tuple| {
+                pgrx::warning!("[KASATE-SCAN] init_scan: found visible tuple tid=({},{}) xmin={} xmax={}",
+                    tid.block, tid.offset, tuple.xmin, tuple.xmax);
                 tuples.push((*tid, tuple.clone()));
                 true
             },
         );
+
+        pgrx::warning!("[KASATE-SCAN] init_scan: collected {} visible tuples", tuples.len());
 
         self.iterator_state = Some(IteratorState {
             tuples,

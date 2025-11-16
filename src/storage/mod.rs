@@ -78,6 +78,8 @@ impl RelationStorage {
         let id = self.allocate_tuple_id();
         let tuple = Tuple::new(id, data, xmin);
         self.tuples.insert(id, tuple);
+        pgrx::warning!("[KASATE-STORAGE] Inserted tuple: tid=({},{}) xmin={}, total_tuples={}",
+            id.block, id.offset, xmin, self.tuples.len());
         id
     }
 
