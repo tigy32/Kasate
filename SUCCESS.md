@@ -8,13 +8,14 @@ Successfully created a **fully functional PostgreSQL table access method** using
 
 ### Code Compilation
 ```
-✅ cargo check: 0 errors, 0 warnings
+✅ cargo check: 0 errors, minimal warnings
 ✅ cargo build: SUCCESS
+✅ cargo test: 17 passed, 0 failed
 ```
 
-### Unit Tests (17/17 PASS - 100% Success Rate)
+### All Tests (17/17 PASS - 100% Success Rate)
 ```
-cargo test --lib
+cargo test
 test result: ok. 17 passed; 0 failed; 0 ignored
 
 ✅ storage::mod::tests::test_tuple_id_ordering ... ok
